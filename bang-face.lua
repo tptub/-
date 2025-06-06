@@ -1,221 +1,192 @@
-﻿-- سكربت تتبع لاعب مع GUI، يمنع السقوط ويتبع اللاعب في الجو + جلوس بدون فيزياء + حركة أمام وخلف خفيفة
+-- إعدادات أولية
+local Player = game.Players.LocalPlayer
+local Gui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+Gui.Name = "DrugsHubGUI"
+Gui.ResetOnSpawn = false
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+-- صوت ترحيبي
+local sound = Instance.new("Sound", workspace)
+sound.SoundId = "rbxassetid://72142838917246"
+sound.Volume = 2
+sound:Play()
 
-local localPlayer = Players.LocalPlayer
-local selectedPlayer = nil
-local following = false
-local followFromFront = false
-local heartbeatConn
+-- صورة ترحيبية فول سكرين
+local splashImage = Instance.new("ImageLabel", Gui)
+splashImage.Size = UDim2.new(1, 0, 1, 0)
+splashImage.Position = UDim2.new(0, 0, 0, 0)
+splashImage.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+splashImage.Image = "rbxassetid://89402902496003"
+splashImage.BackgroundTransparency = 0
 
-local MOVE_INTERVAL = 0.2
-local lastMoveTime = 0
-local oscillate = 0
+-- رسالة ترحيب
+local welcomeText = Instance.new("TextLabel", splashImage)
+welcomeText.Text = "مرحباً بك في 『ＤＲＵＧＳ ＨＵＢ』"
+welcomeText.Font = Enum.Font.GothamBlack
+welcomeText.TextSize = 36
+welcomeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+welcomeText.Size = UDim2.new(1, 0, 0, 100)
+welcomeText.Position = UDim2.new(0, 0, 0.8, 0)
+welcomeText.BackgroundTransparency = 1
 
-local function startFollowing()
-    if following or not selectedPlayer then return end
-    following = true
+-- حذف الترحيب بعد 7 ثوانٍ
+local FloatingButton
 
-    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
+delay(7, function()
+	sound:Destroy()
+	splashImage:Destroy()
+	FloatingButton.Visible = true
+end)
 
-    if humanoid then
-        humanoid.Sit = true
-        humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-    end
+-- إطار الواجهة الرئيسية
+local Main = Instance.new("Frame", Gui)
+Main.Size = UDim2.new(0, 500, 0, 400)
+Main.Position = UDim2.new(0.5, -250, 0.5, -200)
+Main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Visible = true
 
-    heartbeatConn = RunService.Heartbeat:Connect(function()
-        if tick() - lastMoveTime < MOVE_INTERVAL then return end
-        lastMoveTime = tick()
+-- صورة بجانب الاسم
+local Icon = Instance.new("ImageLabel", Main)
+Icon.Size = UDim2.new(0, 40, 0, 40)
+Icon.Position = UDim2.new(0, 10, 0, 10)
+Icon.BackgroundTransparency = 1
+Icon.Image = "rbxassetid://89402902496003"
 
-        if selectedPlayer and selectedPlayer.Character and selectedPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local targetHRP = selectedPlayer.Character.HumanoidRootPart
+-- عنوان الواجهة
+local Title = Instance.new("TextLabel", Main)
+Title.Text = "『ＤＲＵＧＳ ＨＵＢ』"
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 24
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Size = UDim2.new(0.7, -100, 0, 40)
+Title.Position = UDim2.new(0, 60, 0, 10)
+Title.BackgroundTransparency = 1
+Title.TextXAlignment = Enum.TextXAlignment.Left
 
-            oscillate = oscillate + 1
-            local offset = math.sin(oscillate / 8) * 0.8 -- حركة خفيفة أمام وخلف
+-- زر إغلاق
+local Close = Instance.new("TextButton", Main)
+Close.Text = "✖"
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 20
+Close.TextColor3 = Color3.fromRGB(255, 80, 80)
+Close.Size = UDim2.new(0, 40, 0, 40)
+Close.Position = UDim2.new(1, -45, 0, 5)
+Close.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Close.MouseButton1Click:Connect(function()
+	Gui:Destroy()
+end)
 
-            local direction = followFromFront and 1.5 or -1.5
-            local targetPosition = targetHRP.Position + (targetHRP.CFrame.LookVector * (direction + offset)) + Vector3.new(0, 2.5, 0)
-            hrp.Anchored = true
-            hrp.CFrame = CFrame.new(targetPosition, targetHRP.Position)
-        else
-            stopFollowing()
-        end
-    end)
+-- زر تصغير
+local Min = Instance.new("TextButton", Main)
+Min.Text = "━"
+Min.Font = Enum.Font.GothamBold
+Min.TextSize = 20
+Min.TextColor3 = Color3.fromRGB(80, 255, 80)
+Min.Size = UDim2.new(0, 40, 0, 40)
+Min.Position = UDim2.new(1, -90, 0, 5)
+Min.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+
+local minimized = false
+local buttonsToToggle = {}
+
+Min.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	Main.Visible = not minimized
+end)
+
+-- زر عائم لإعادة إظهار الواجهة
+FloatingButton = Instance.new("ImageButton", Gui)
+FloatingButton.Size = UDim2.new(0, 60, 0, 60)
+FloatingButton.Position = UDim2.new(0, 20, 1, -80)
+FloatingButton.BackgroundTransparency = 1
+FloatingButton.Image = "rbxassetid://89402902496003"
+FloatingButton.Visible = false
+FloatingButton.MouseButton1Click:Connect(function()
+	Main.Visible = not Main.Visible
+end)
+
+-- زر مخصص
+local function MakeButton(text, posY, callback)
+	local Btn = Instance.new("TextButton", Main)
+	Btn.Size = UDim2.new(0.9, 0, 0, 45)
+	Btn.Position = UDim2.new(0.05, 0, 0, posY)
+	Btn.Text = text
+	Btn.Font = Enum.Font.GothamBold
+	Btn.TextSize = 20
+	Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	Btn.BorderSizePixel = 0
+	Btn.MouseButton1Click:Connect(callback)
+	table.insert(buttonsToToggle, Btn)
 end
 
-local function stopFollowing()
-    following = false
-    if heartbeatConn then
-        heartbeatConn:Disconnect()
-        heartbeatConn = nil
-    end
+-- الأزرار
+MakeButton("🎭انيق طي--زك🥵", 60, function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/tptub/fuke/refs/heads/main/almon7arf"))()
+end)
 
-    local char = localPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if humanoid then
-            humanoid.Sit = false
-            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-        if hrp then
-            hrp.Anchored = false
-        end
-    end
-end
+MakeButton("🚨 RD4", 115, function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/M1ZZ001/BrookhavenR4D/main/Brookhaven%20R4D%20Script"))()
+end)
 
-local function refreshPlayerList(scrollFrame)
-    scrollFrame:ClearAllChildren()
+MakeButton("📜 أكواد", 170, function()
+	local CodesFrame = Instance.new("Frame", Gui)
+	CodesFrame.Size = UDim2.new(0, 350, 0, 300)
+	CodesFrame.Position = UDim2.new(0.5, -175, 0.5, -150)
+	CodesFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+	CodesFrame.BorderSizePixel = 0
+	CodesFrame.Active = true
+	CodesFrame.Draggable = true
 
-    local layout = Instance.new("UIListLayout", scrollFrame)
-    layout.Padding = UDim.new(0, 6)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
+	local codes = {
+		"98509241790002",
+		"106169760792625",
+		"118074256196452",
+		"8701632845",
+		"6713993281",
+		"6989727632",
+		"4776398821",
+		"16190784875"
+	}
 
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr ~= localPlayer then
-            local btn = Instance.new("TextButton", scrollFrame)
-            btn.Size = UDim2.new(1, -10, 0, 60)
-            btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-            btn.Text = plr.DisplayName
-            btn.Font = Enum.Font.GothamBold
-            btn.TextColor3 = Color3.new(1, 1, 1)
-            btn.TextSize = 16
-            btn.LayoutOrder = plr.UserId
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+	for i, code in ipairs(codes) do
+		local codeText = Instance.new("TextLabel", CodesFrame)
+		codeText.Size = UDim2.new(0.7, 0, 0, 25)
+		codeText.Position = UDim2.new(0.05, 0, 0, (i - 1) * 30)
+		codeText.Text = code
+		codeText.TextColor3 = Color3.fromRGB(255, 255, 255)
+		codeText.Font = Enum.Font.Gotham
+		codeText.TextSize = 16
+		codeText.BackgroundTransparency = 1
+		codeText.TextXAlignment = Enum.TextXAlignment.Left
 
-            local success, thumb = pcall(function()
-                return Players:GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-            end)
-            if success then
-                local img = Instance.new("ImageLabel", btn)
-                img.Image = thumb
-                img.Size = UDim2.new(0, 40, 0, 40)
-                img.Position = UDim2.new(0, 5, 0.5, -20)
-                img.BackgroundTransparency = 1
-            end
+		local copyBtn = Instance.new("TextButton", CodesFrame)
+		copyBtn.Size = UDim2.new(0.2, 0, 0, 25)
+		copyBtn.Position = UDim2.new(0.75, 0, 0, (i - 1) * 30)
+		copyBtn.Text = "نسخ"
+		copyBtn.Font = Enum.Font.GothamBold
+		copyBtn.TextSize = 14
+		copyBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		copyBtn.MouseButton1Click:Connect(function()
+			setclipboard(code)
+		end)
+	end
+end)
 
-            btn.MouseButton1Click:Connect(function()
-                selectedPlayer = plr
-            end)
-        end
-    end
-end
+MakeButton("✈️ طيران نسخة المنحرف", 225, function()
+	loadstring(game:HttpGet("https://pastebin.com/raw/cZHh2grR"))()
+end)
 
-local function createGUI()
-    local screenGui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
-    screenGui.Name = "FollowGUI"
-    screenGui.ResetOnSpawn = false
+MakeButton("🔧 ESP كشف اماكن", 280, function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/tptub/ESP/refs/heads/main/ESP.lua"))()
+end)
 
-    local mainFrame = Instance.new("Frame", screenGui)
-    mainFrame.Size = UDim2.new(0, 350, 0, 560)
-    mainFrame.Position = UDim2.new(0, 50, 0.2, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+-- زر إضافي فارغ
+MakeButton("انيق وجهك 🥵", 335, function()
 
-    local closeBtn = Instance.new("TextButton", mainFrame)
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 5)
-    closeBtn.Text = "❌"
-    closeBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-    closeBtn.TextColor3 = Color3.new(1, 1, 1)
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.TextScaled = true
-    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
-    closeBtn.MouseButton1Click:Connect(function()
-        mainFrame.Visible = false
-        stopFollowing()
-    end)
-
-    local title = Instance.new("TextLabel", mainFrame)
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundTransparency = 1
-    title.Text = "🚀 تتبع لاعب مستمر"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.Font = Enum.Font.GothamBold
-    title.TextScaled = true
-
-    local scroll = Instance.new("ScrollingFrame", mainFrame)
-    scroll.Size = UDim2.new(1, -20, 1, -220)
-    scroll.Position = UDim2.new(0, 10, 0, 50)
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.ScrollBarThickness = 8
-    scroll.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    scroll.BorderSizePixel = 0
-    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scroll.ClipsDescendants = true
-
-    refreshPlayerList(scroll)
-
-    local refreshBtn = Instance.new("TextButton", mainFrame)
-    refreshBtn.Size = UDim2.new(1, -20, 0, 40)
-    refreshBtn.Position = UDim2.new(0, 10, 1, -170)
-    refreshBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
-    refreshBtn.Text = "🔄 تحديث القائمة"
-    refreshBtn.Font = Enum.Font.GothamBold
-    refreshBtn.TextColor3 = Color3.new(1, 1, 1)
-    refreshBtn.TextScaled = true
-    Instance.new("UICorner", refreshBtn).CornerRadius = UDim.new(0, 10)
-    refreshBtn.MouseButton1Click:Connect(function()
-        refreshPlayerList(scroll)
-    end)
-
-    local frontBtn = Instance.new("TextButton", mainFrame)
-    frontBtn.Size = UDim2.new(0.5, -15, 0, 40)
-    frontBtn.Position = UDim2.new(0, 10, 1, -120)
-    frontBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-    frontBtn.Text = "👁️ للوجه"
-    frontBtn.Font = Enum.Font.GothamBold
-    frontBtn.TextColor3 = Color3.new(1, 1, 1)
-    frontBtn.TextScaled = true
-    Instance.new("UICorner", frontBtn).CornerRadius = UDim.new(0, 10)
-    frontBtn.MouseButton1Click:Connect(function()
-        followFromFront = true
-    end)
-
-    local backBtn = Instance.new("TextButton", mainFrame)
-    backBtn.Size = UDim2.new(0.5, -15, 0, 40)
-    backBtn.Position = UDim2.new(0.5, 5, 1, -120)
-    backBtn.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
-    backBtn.Text = "🔙 للخلف"
-    backBtn.Font = Enum.Font.GothamBold
-    backBtn.TextColor3 = Color3.new(1, 1, 1)
-    backBtn.TextScaled = true
-    Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 10)
-    backBtn.MouseButton1Click:Connect(function()
-        followFromFront = false
-    end)
-
-    local startBtn = Instance.new("TextButton", mainFrame)
-    startBtn.Size = UDim2.new(1, -20, 0, 40)
-    startBtn.Position = UDim2.new(0, 10, 1, -70)
-    startBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    startBtn.Text = "✅ ابدأ التتبع"
-    startBtn.Font = Enum.Font.GothamBold
-    startBtn.TextColor3 = Color3.new(1, 1, 1)
-    startBtn.TextScaled = true
-    Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0, 10)
-    startBtn.MouseButton1Click:Connect(function()
-        startFollowing()
-    end)
-
-    local stopBtn = Instance.new("TextButton", mainFrame)
-    stopBtn.Size = UDim2.new(1, -20, 0, 40)
-    stopBtn.Position = UDim2.new(0, 10, 1, -20)
-    stopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    stopBtn.Text = "🛑 إيقاف التتبع"
-    stopBtn.Font = Enum.Font.GothamBold
-    stopBtn.TextColor3 = Color3.new(1, 1, 1)
-    stopBtn.TextScaled = true
-    Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 10)
-    stopBtn.MouseButton1Click:Connect(function()
-        stopFollowing()
-    end)
-end
-
-createGUI()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/tptub/-/refs/heads/main/bang-face.lua"))()
+	
+end)
