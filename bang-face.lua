@@ -1,4 +1,4 @@
--- سكربت تتبع لاعب مع GUI، يمنع السقوط ويتبع اللاعب في الجو + جلوس بدون فيزياء + حركة أمام وخلف خفيفة
+    -- سكربت تتبع لاعب مع GUI، يمنع السقوط ويتبع اللاعب في الجو + جلوس بدون فيزياء + حركة أمام وخلف خفيفة
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -135,7 +135,7 @@ local function createGUI()
     local title = Instance.new("TextLabel", mainFrame)
     title.Size = UDim2.new(1, 0, 0, 40)
     title.BackgroundTransparency = 1
-    title.Text = "🚀 تتبع لاعب مستمر"
+    title.Text = "🚀نيك الوجه"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextScaled = true
