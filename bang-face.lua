@@ -1,4 +1,4 @@
-    -- سكربت تتبع لاعب مع GUI، يمنع السقوط ويتبع اللاعب في الجو + جلوس بدون فيزياء + حركة أمام وخلف خفيفة
+-- سكربت تتبع لاعب مع GUI، يمنع السقوط ويتبع اللاعب في الجو + جلوس بدون فيزياء + حركة أمام وخلف خفيفة
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,9 +9,46 @@ local following = false
 local followFromFront = false
 local heartbeatConn
 
-local MOVE_INTERVAL = 0.2
+local MOVE_INTERVAL = 0.7
 local lastMoveTime = 0
-local oscillate = 0
+local oscillate = 1
+
+local function stopFixingPosition()
+    local char = localPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    hrp.Anchored = false
+
+    local bp = hrp:FindFirstChild("BodyPosition")
+    if bp then
+        bp:Destroy()
+    end
+
+    local bg = hrp:FindFirstChild("BodyGyro")
+    if bg then
+        bg:Destroy()
+    end
+end
+
+local function stopFollowing()
+    following = false
+    if heartbeatConn then
+        heartbeatConn:Disconnect()
+        heartbeatConn = nil
+    end
+
+    local char = localPlayer.Character
+    if char then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.Sit = false
+            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+        stopFixingPosition()
+    end
+end
 
 local function startFollowing()
     if following or not selectedPlayer then return end
@@ -36,35 +73,39 @@ local function startFollowing()
             oscillate = oscillate + 1
             local offset = math.sin(oscillate / 8) * 0.8 -- حركة خفيفة أمام وخلف
 
-            local direction = followFromFront and 1.5 or -1.5
+            local direction = 1.5 -- دائمًا أمام اللاعب
+
             local targetPosition = targetHRP.Position + (targetHRP.CFrame.LookVector * (direction + offset)) + Vector3.new(0, 2.5, 0)
-            hrp.Anchored = true
+
+            hrp.Anchored = false
+
+            local bp = hrp:FindFirstChild("BodyPosition")
+            if not bp then
+                bp = Instance.new("BodyPosition")
+                bp.Name = "BodyPosition"
+                bp.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+                bp.P = 3000
+                bp.D = 100
+                bp.Parent = hrp
+            end
+            bp.Position = targetPosition
+
+            local bg = hrp:FindFirstChild("BodyGyro")
+            if not bg then
+                bg = Instance.new("BodyGyro")
+                bg.Name = "BodyGyro"
+                bg.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
+                bg.P = 10000
+                bg.D = 200
+                bg.Parent = hrp
+            end
+            bg.CFrame = CFrame.new(targetPosition, targetHRP.Position)
+
             hrp.CFrame = CFrame.new(targetPosition, targetHRP.Position)
         else
             stopFollowing()
         end
     end)
-end
-
-local function stopFollowing()
-    following = false
-    if heartbeatConn then
-        heartbeatConn:Disconnect()
-        heartbeatConn = nil
-    end
-
-    local char = localPlayer.Character
-    if char then
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if humanoid then
-            humanoid.Sit = false
-            humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-        if hrp then
-            hrp.Anchored = false
-        end
-    end
 end
 
 local function refreshPlayerList(scrollFrame)
@@ -181,8 +222,8 @@ local function createGUI()
     local backBtn = Instance.new("TextButton", mainFrame)
     backBtn.Size = UDim2.new(0.5, -15, 0, 40)
     backBtn.Position = UDim2.new(0.5, 5, 1, -120)
-    backBtn.BackgroundColor3 = Color3.fromRGB(255, 120, 0)
-    backBtn.Text = "🔙 للخلف"
+    backBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    backBtn.Text = "👀 من الخلف"
     backBtn.Font = Enum.Font.GothamBold
     backBtn.TextColor3 = Color3.new(1, 1, 1)
     backBtn.TextScaled = true
@@ -194,27 +235,44 @@ local function createGUI()
     local startBtn = Instance.new("TextButton", mainFrame)
     startBtn.Size = UDim2.new(1, -20, 0, 40)
     startBtn.Position = UDim2.new(0, 10, 1, -70)
-    startBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
-    startBtn.Text = "✅ ابدأ التتبع"
+    startBtn.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+    startBtn.Text = "▶️ بدء التتبع"
     startBtn.Font = Enum.Font.GothamBold
     startBtn.TextColor3 = Color3.new(1, 1, 1)
     startBtn.TextScaled = true
     Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0, 10)
     startBtn.MouseButton1Click:Connect(function()
-        startFollowing()
+        if selectedPlayer then
+            startFollowing()
+        else
+            warn("يرجى اختيار لاعب أولاً")
+        end
     end)
 
     local stopBtn = Instance.new("TextButton", mainFrame)
     stopBtn.Size = UDim2.new(1, -20, 0, 40)
     stopBtn.Position = UDim2.new(0, 10, 1, -20)
-    stopBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    stopBtn.Text = "🛑 إيقاف التتبع"
+    stopBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    stopBtn.Text = "⏹️ إيقاف التتبع"
     stopBtn.Font = Enum.Font.GothamBold
     stopBtn.TextColor3 = Color3.new(1, 1, 1)
     stopBtn.TextScaled = true
     Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0, 10)
     stopBtn.MouseButton1Click:Connect(function()
         stopFollowing()
+    end)
+
+    local unanchorBtn = Instance.new("TextButton", mainFrame)
+    unanchorBtn.Size = UDim2.new(1, -20, 0, 40)
+    unanchorBtn.Position = UDim2.new(0, 10, 1, -120)
+    unanchorBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+    unanchorBtn.Text = "🛑 إلغاء تثبيت الشخصية"
+    unanchorBtn.Font = Enum.Font.GothamBold
+    unanchorBtn.TextColor3 = Color3.new(1, 1, 1)
+    unanchorBtn.TextScaled = true
+    Instance.new("UICorner", unanchorBtn).CornerRadius = UDim.new(0, 10)
+    unanchorBtn.MouseButton1Click:Connect(function()
+        stopFixingPosition()
     end)
 end
 
